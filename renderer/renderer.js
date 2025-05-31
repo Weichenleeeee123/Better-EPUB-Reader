@@ -18,6 +18,7 @@ const lineHeightSelect = document.getElementById('lineHeight');
 const themeSelect = document.getElementById('theme');
 const recentBooksSelect = document.getElementById('recentBooks');
 const clearRecentBtn = document.getElementById('clearRecentBtn');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
 
 console.log('window.electronAPI:', window.electronAPI);
 
@@ -392,6 +393,33 @@ window.addEventListener('keydown', (e) => {
     if (rendition) rendition.next();
     e.preventDefault();
   }
+});
+
+// 全屏切换
+fullscreenBtn.onclick = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+    fullscreenBtn.textContent = '退出全屏';
+  } else {
+    document.exitFullscreen();
+    fullscreenBtn.textContent = '全屏';
+  }
+};
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    fullscreenBtn.textContent = '全屏';
+  } else {
+    fullscreenBtn.textContent = '退出全屏';
+  }
+  // 进入或退出全屏时重新调整epub渲染
+  if (rendition) {
+    rendition.resize();
+  }
+});
+
+// 窗口尺寸变化时自适应
+window.addEventListener('resize', () => {
+  if (rendition) rendition.resize();
 });
 
 // 启动时渲染历史
