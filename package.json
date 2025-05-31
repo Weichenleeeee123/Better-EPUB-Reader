@@ -1,0 +1,15 @@
+{
+  "name": "epub-reader",
+  "version": "1.0.0",
+  "description": "一个简单的epub阅读器桌面端（Electron+epub.js）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "epubjs": "^0.3.88"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3"
+  }
+}
