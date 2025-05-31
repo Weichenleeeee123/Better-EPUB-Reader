@@ -4,6 +4,7 @@ let currentLocation = null;
 let tocState = JSON.parse(localStorage.getItem('tocState') || '{}');
 let totalPages = 0;
 let currentBookKey = '';
+let locationsCacheKey = '';
 
 const openBtn = document.getElementById('openBtn');
 const tocToggleBtn = document.getElementById('tocToggleBtn');
@@ -27,6 +28,7 @@ openBtn.onclick = async () => {
   try {
     const filePath = await window.electronAPI.openFile();
     currentBookKey = 'epub-reader-cfi-' + filePath;
+    locationsCacheKey = 'epub-reader-locations-' + filePath;
     console.log('选择的文件路径:', filePath);
     if (!filePath) {
       viewer.innerHTML = '<div style="color:red">未选择文件</div>';
@@ -48,14 +50,33 @@ openBtn.onclick = async () => {
       book = ePub(epubBlob);
       console.log('ePub book:', book);
       rendition = book.renderTo('viewer', { width: '100%', height: '80vh' });
-      // 生成全书分页
-      rendition.display().then(() => {
-        return book.locations.generate(1000);
-      }).then(() => {
-        totalPages = book.locations.length();
-        // 跳转到上次阅读位置
+      // 生成或加载全书分页
+      progressSpan.textContent = '正在分页，请稍候...';
+      let locationsData = localStorage.getItem(locationsCacheKey);
+      let locationsLoaded = false;
+      rendition.display().then(async () => {
+        if (locationsData) {
+          try {
+            book.locations.load(JSON.parse(locationsData));
+            totalPages = book.locations.length();
+            locationsLoaded = true;
+            progressSpan.textContent = '';
+          } catch (e) {
+            // 缓存损坏，重新生成
+            locationsData = null;
+          }
+        }
+        if (!locationsLoaded) {
+          await book.locations.generate(1500);
+          totalPages = book.locations.length();
+          localStorage.setItem(locationsCacheKey, JSON.stringify(book.locations.save()));
+          progressSpan.textContent = '';
+        }
+        // 跳转到上次阅读位置，只跳转一次
         const lastCfi = localStorage.getItem(currentBookKey);
+        let hasJumped = false;
         if (lastCfi) {
+          hasJumped = true;
           rendition.display(lastCfi);
         }
         rendition.on('relocated', (location) => {
@@ -64,6 +85,11 @@ openBtn.onclick = async () => {
           // 保存当前位置
           if (location && location.start && location.start.cfi) {
             localStorage.setItem(currentBookKey, location.start.cfi);
+          }
+          // 如果未跳转过且有lastCfi，首次 relocated 时跳转
+          if (!hasJumped && lastCfi) {
+            hasJumped = true;
+            rendition.display(lastCfi);
           }
         });
         // 首次显示进度
