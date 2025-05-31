@@ -6,17 +6,79 @@
   <style>
     body { font-family: sans-serif; margin: 0; padding: 0; }
     #toolbar { padding: 10px; background: #f0f0f0; }
-    #viewer { width: 100vw; height: 80vh; border: none; }
-    button { margin-right: 10px; }
+    #toc {
+      width: 220px;
+      overflow-y: auto;
+      background: #fafafa;
+      border-right: 1px solid #eee;
+      display: none;
+      transition: box-shadow 0.2s;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+    }
+    #toc h4 {
+      margin: 10px 0 10px 10px;
+      font-size: 16px;
+      color: #333;
+    }
+    #toc ul {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+    #toc li {
+      cursor: pointer;
+      margin: 6px 0;
+      padding: 4px 12px 4px 18px;
+      border-radius: 4px;
+      transition: background 0.2s;
+      user-select: none;
+      position: relative;
+    }
+    #toc li:hover {
+      background: #e6f7ff;
+      color: #1890ff;
+    }
+    #toc li.toc-collapsed > ul {
+      display: none;
+    }
+    #toc li.toc-expandable:before {
+      content: '\25B6';
+      position: absolute;
+      left: 4px;
+      top: 8px;
+      font-size: 10px;
+      color: #888;
+      transition: transform 0.2s;
+    }
+    #toc li.toc-expanded:before {
+      content: '\25BC';
+      position: absolute;
+      left: 4px;
+      top: 8px;
+      font-size: 10px;
+      color: #888;
+      transition: transform 0.2s;
+    }
+    #main-content {
+      display: flex;
+      height: 80vh;
+      width: 100vw;
+    }
+    #viewer { flex: 1; min-width: 0; }
   </style>
 </head>
 <body>
   <div id="toolbar">
     <button id="openBtn">打开 EPUB</button>
+    <button id="tocToggleBtn">目录</button>
     <button id="prevBtn">上一页</button>
     <button id="nextBtn">下一页</button>
+    <span id="progress" style="margin-left:20px;color:#888;font-size:14px;"></span>
   </div>
-  <div id="viewer"></div>
+  <div id="main-content">
+    <div id="toc"></div>
+    <div id="viewer"></div>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script>window.JSZip = window.JSZip || JSZip;</script>
   <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
