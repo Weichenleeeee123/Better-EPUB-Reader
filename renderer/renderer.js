@@ -16,6 +16,8 @@ const progressSpan = document.getElementById('progress');
 const fontSizeSelect = document.getElementById('fontSize');
 const lineHeightSelect = document.getElementById('lineHeight');
 const themeSelect = document.getElementById('theme');
+const recentBooksSelect = document.getElementById('recentBooks');
+const clearRecentBtn = document.getElementById('clearRecentBtn');
 
 console.log('window.electronAPI:', window.electronAPI);
 
@@ -39,9 +41,8 @@ window.addEventListener('drop', async (e) => {
     alert('只支持epub文件');
     return;
   }
-  // 直接用file.path
   const filePath = file.path;
-  await openEpubFile(filePath);
+  await openEpubFileWithRecent(filePath);
 });
 
 // 主题样式定义
@@ -91,6 +92,63 @@ function restoreReaderStyle() {
       if (theme) themeSelect.value = theme;
     } catch {}
   }
+}
+
+// 最近阅读最大数量
+const RECENT_MAX = 10;
+
+// 记录最近阅读，带书名
+function addRecentBook(filePath, title) {
+  let recent = JSON.parse(localStorage.getItem('epub-reader-recent') || '[]');
+  // 去重，最新的放前面
+  recent = recent.filter(item => item.path !== filePath);
+  recent.unshift({ path: filePath, title });
+  if (recent.length > RECENT_MAX) recent = recent.slice(0, RECENT_MAX);
+  localStorage.setItem('epub-reader-recent', JSON.stringify(recent));
+  renderRecentBooks();
+}
+
+// 渲染最近阅读下拉
+function renderRecentBooks() {
+  let recent = JSON.parse(localStorage.getItem('epub-reader-recent') || '[]');
+  recentBooksSelect.innerHTML = '<option value="">请选择...</option>';
+  recent.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.path;
+    opt.textContent = item.title ? `${item.title} (${item.path})` : item.path;
+    recentBooksSelect.appendChild(opt);
+  });
+}
+
+// 选择最近阅读
+recentBooksSelect.onchange = async function() {
+  const filePath = this.value;
+  if (filePath) {
+    await openEpubFileWithRecent(filePath);
+  }
+};
+
+// 清空历史
+clearRecentBtn.onclick = function() {
+  localStorage.removeItem('epub-reader-recent');
+  renderRecentBooks();
+};
+
+// 打开书时记录历史，先获取书名
+async function openEpubFileWithRecent(filePath) {
+  // 先读取文件内容，获取书名
+  const arrayBuffer = await window.electronAPI.readFile(filePath);
+  const u8arr = new Uint8Array(arrayBuffer);
+  const epubBlob = new Blob([u8arr], { type: 'application/epub+zip' });
+  let title = '';
+  try {
+    const tempBook = ePub(epubBlob);
+    const metadata = await tempBook.loaded.metadata;
+    title = metadata.title || '';
+    tempBook.destroy && tempBook.destroy();
+  } catch {}
+  addRecentBook(filePath, title);
+  return openEpubFile(filePath);
 }
 
 // 封装打开epub的主逻辑，供按钮和拖拽复用
@@ -181,7 +239,7 @@ async function openEpubFile(filePath) {
 openBtn.onclick = async () => {
   const filePath = await window.electronAPI.openFile();
   if (filePath) {
-    await openEpubFile(filePath);
+    await openEpubFileWithRecent(filePath);
   }
 };
 
@@ -334,4 +392,7 @@ window.addEventListener('keydown', (e) => {
     if (rendition) rendition.next();
     e.preventDefault();
   }
-}); 
+});
+
+// 启动时渲染历史
+renderRecentBooks(); 
