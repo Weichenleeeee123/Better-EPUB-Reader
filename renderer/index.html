@@ -74,6 +74,28 @@
     <button id="prevBtn">上一页</button>
     <button id="nextBtn">下一页</button>
     <span id="progress" style="margin-left:20px;color:#888;font-size:14px;"></span>
+    <label style="margin-left:20px;">字体
+      <select id="fontSize">
+        <option value="14px">小</option>
+        <option value="18px" selected>中</option>
+        <option value="22px">大</option>
+        <option value="26px">特大</option>
+      </select>
+    </label>
+    <label style="margin-left:10px;">行距
+      <select id="lineHeight">
+        <option value="1.2">紧凑</option>
+        <option value="1.6" selected>正常</option>
+        <option value="2">宽松</option>
+      </select>
+    </label>
+    <label style="margin-left:10px;">主题
+      <select id="theme">
+        <option value="light" selected>明亮</option>
+        <option value="dark">夜间</option>
+        <option value="sepia">护眼</option>
+      </select>
+    </label>
   </div>
   <div id="main-content">
     <div id="toc"></div>

@@ -13,6 +13,9 @@ const nextBtn = document.getElementById('nextBtn');
 const viewer = document.getElementById('viewer');
 const tocDiv = document.getElementById('toc');
 const progressSpan = document.getElementById('progress');
+const fontSizeSelect = document.getElementById('fontSize');
+const lineHeightSelect = document.getElementById('lineHeight');
+const themeSelect = document.getElementById('theme');
 
 console.log('window.electronAPI:', window.electronAPI);
 
@@ -40,6 +43,55 @@ window.addEventListener('drop', async (e) => {
   const filePath = file.path;
   await openEpubFile(filePath);
 });
+
+// 主题样式定义
+const themes = {
+  light: {
+    body: { background: '#fff', color: '#222' }
+  },
+  dark: {
+    body: { background: '#181818', color: '#e6e6e6' }
+  },
+  sepia: {
+    body: { background: '#f4ecd8', color: '#5b4636' }
+  }
+};
+
+// 应用阅读样式
+function applyReaderStyle() {
+  if (!rendition) return;
+  const fontSize = fontSizeSelect.value;
+  const lineHeight = lineHeightSelect.value;
+  const theme = themeSelect.value;
+  rendition.themes.register('custom', {
+    body: {
+      ...themes[theme].body
+    }
+  });
+  rendition.themes.select('custom');
+  rendition.themes.override('font-size', fontSize);
+  rendition.themes.override('line-height', lineHeight);
+  // 保存设置
+  localStorage.setItem('epub-reader-style', JSON.stringify({ fontSize, lineHeight, theme }));
+}
+
+// 监听控件变化
+fontSizeSelect.onchange = applyReaderStyle;
+lineHeightSelect.onchange = applyReaderStyle;
+themeSelect.onchange = applyReaderStyle;
+
+// 打开书后自动应用样式
+function restoreReaderStyle() {
+  const saved = localStorage.getItem('epub-reader-style');
+  if (saved) {
+    try {
+      const { fontSize, lineHeight, theme } = JSON.parse(saved);
+      if (fontSize) fontSizeSelect.value = fontSize;
+      if (lineHeight) lineHeightSelect.value = lineHeight;
+      if (theme) themeSelect.value = theme;
+    } catch {}
+  }
+}
 
 // 封装打开epub的主逻辑，供按钮和拖拽复用
 async function openEpubFile(filePath) {
@@ -116,6 +168,9 @@ async function openEpubFile(filePath) {
       renderTOC(nav.toc);
       tocDiv.style.display = 'block'; // 只在打开新书时显示目录
     });
+    // 应用阅读样式
+    restoreReaderStyle();
+    applyReaderStyle();
   } catch (err) {
     viewer.innerHTML = '<div style="color:red">ePub 初始化失败：' + err + '</div>';
     console.error('ePub 初始化失败:', err);
@@ -271,7 +326,7 @@ function base64ToBlob(base64, mime) {
 
 // 键盘快捷键：左右方向键/PageUp/PageDown 翻页
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
   if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
     if (rendition) rendition.prev();
     e.preventDefault();
