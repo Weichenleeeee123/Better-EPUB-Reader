@@ -24,89 +24,109 @@ tocToggleBtn.onclick = () => {
   }
 };
 
-openBtn.onclick = async () => {
+// 拖拽打开文件
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+  const file = e.dataTransfer.files[0];
+  if (!file.name.endsWith('.epub')) {
+    alert('只支持epub文件');
+    return;
+  }
+  // 直接用file.path
+  const filePath = file.path;
+  await openEpubFile(filePath);
+});
+
+// 封装打开epub的主逻辑，供按钮和拖拽复用
+async function openEpubFile(filePath) {
+  currentBookKey = 'epub-reader-cfi-' + filePath;
+  locationsCacheKey = 'epub-reader-locations-' + filePath;
+  console.log('拖拽或选择的文件路径:', filePath);
+  if (!filePath) {
+    viewer.innerHTML = '<div style="color:red">未选择文件</div>';
+    return;
+  }
+  const arrayBuffer = await window.electronAPI.readFile(filePath);
+  console.log('arrayBuffer:', arrayBuffer);
+  if (!arrayBuffer) {
+    viewer.innerHTML = '<div style="color:red">文件读取失败</div>';
+    return;
+  }
+  const u8arr = new Uint8Array(arrayBuffer);
+  console.log('u8arr.length:', u8arr.length);
+  const epubBlob = new Blob([u8arr], { type: 'application/epub+zip' });
+  console.log('epubBlob:', epubBlob);
+  if (book) book.destroy();
+  if (rendition) rendition.destroy();
   try {
-    const filePath = await window.electronAPI.openFile();
-    currentBookKey = 'epub-reader-cfi-' + filePath;
-    locationsCacheKey = 'epub-reader-locations-' + filePath;
-    console.log('选择的文件路径:', filePath);
-    if (!filePath) {
-      viewer.innerHTML = '<div style="color:red">未选择文件</div>';
-      return;
-    }
-    const arrayBuffer = await window.electronAPI.readFile(filePath);
-    console.log('arrayBuffer:', arrayBuffer);
-    if (!arrayBuffer) {
-      viewer.innerHTML = '<div style="color:red">文件读取失败</div>';
-      return;
-    }
-    const u8arr = new Uint8Array(arrayBuffer);
-    console.log('u8arr.length:', u8arr.length);
-    const epubBlob = new Blob([u8arr], { type: 'application/epub+zip' });
-    console.log('epubBlob:', epubBlob);
-    if (book) book.destroy();
-    if (rendition) rendition.destroy();
-    try {
-      book = ePub(epubBlob);
-      console.log('ePub book:', book);
-      rendition = book.renderTo('viewer', { width: '100%', height: '80vh' });
-      // 生成或加载全书分页
-      progressSpan.textContent = '正在分页，请稍候...';
-      let locationsData = localStorage.getItem(locationsCacheKey);
-      let locationsLoaded = false;
-      rendition.display().then(async () => {
-        if (locationsData) {
-          try {
-            book.locations.load(JSON.parse(locationsData));
-            totalPages = book.locations.length();
-            locationsLoaded = true;
-            progressSpan.textContent = '';
-          } catch (e) {
-            // 缓存损坏，重新生成
-            locationsData = null;
-          }
-        }
-        if (!locationsLoaded) {
-          await book.locations.generate(1500);
+    book = ePub(epubBlob);
+    console.log('ePub book:', book);
+    rendition = book.renderTo('viewer', { width: '100%', height: '80vh' });
+    // 生成或加载全书分页
+    progressSpan.textContent = '正在分页，请稍候...';
+    let locationsData = localStorage.getItem(locationsCacheKey);
+    let locationsLoaded = false;
+    rendition.display().then(async () => {
+      if (locationsData) {
+        try {
+          book.locations.load(JSON.parse(locationsData));
           totalPages = book.locations.length();
-          localStorage.setItem(locationsCacheKey, JSON.stringify(book.locations.save()));
+          locationsLoaded = true;
           progressSpan.textContent = '';
+        } catch (e) {
+          // 缓存损坏，重新生成
+          locationsData = null;
         }
-        // 跳转到上次阅读位置，只跳转一次
-        const lastCfi = localStorage.getItem(currentBookKey);
-        let hasJumped = false;
-        if (lastCfi) {
+      }
+      if (!locationsLoaded) {
+        await book.locations.generate(1500);
+        totalPages = book.locations.length();
+        localStorage.setItem(locationsCacheKey, JSON.stringify(book.locations.save()));
+        progressSpan.textContent = '';
+      }
+      // 跳转到上次阅读位置，只跳转一次
+      const lastCfi = localStorage.getItem(currentBookKey);
+      let hasJumped = false;
+      if (lastCfi) {
+        hasJumped = true;
+        rendition.display(lastCfi);
+      }
+      rendition.on('relocated', (location) => {
+        currentLocation = location;
+        updateProgress(location);
+        // 保存当前位置
+        if (location && location.start && location.start.cfi) {
+          localStorage.setItem(currentBookKey, location.start.cfi);
+        }
+        // 如果未跳转过且有lastCfi，首次 relocated 时跳转
+        if (!hasJumped && lastCfi) {
           hasJumped = true;
           rendition.display(lastCfi);
         }
-        rendition.on('relocated', (location) => {
-          currentLocation = location;
-          updateProgress(location);
-          // 保存当前位置
-          if (location && location.start && location.start.cfi) {
-            localStorage.setItem(currentBookKey, location.start.cfi);
-          }
-          // 如果未跳转过且有lastCfi，首次 relocated 时跳转
-          if (!hasJumped && lastCfi) {
-            hasJumped = true;
-            rendition.display(lastCfi);
-          }
-        });
-        // 首次显示进度
-        updateProgress(rendition.location);
       });
-      // 加载目录
-      book.loaded.navigation.then(nav => {
-        renderTOC(nav.toc);
-        tocDiv.style.display = 'block'; // 只在打开新书时显示目录
-      });
-    } catch (err) {
-      viewer.innerHTML = '<div style="color:red">ePub 初始化失败：' + err + '</div>';
-      console.error('ePub 初始化失败:', err);
-    }
+      // 首次显示进度
+      updateProgress(rendition.location);
+    });
+    // 加载目录
+    book.loaded.navigation.then(nav => {
+      renderTOC(nav.toc);
+      tocDiv.style.display = 'block'; // 只在打开新书时显示目录
+    });
   } catch (err) {
-    viewer.innerHTML = '<div style="color:red">未知错误：' + err + '</div>';
-    console.error('未知错误:', err);
+    viewer.innerHTML = '<div style="color:red">ePub 初始化失败：' + err + '</div>';
+    console.error('ePub 初始化失败:', err);
+  }
+}
+
+// 修改按钮打开逻辑为复用openEpubFile
+openBtn.onclick = async () => {
+  const filePath = await window.electronAPI.openFile();
+  if (filePath) {
+    await openEpubFile(filePath);
   }
 };
 
@@ -247,4 +267,16 @@ function base64ToBlob(base64, mime) {
   }
   const byteArray = new Uint8Array(byteNumbers);
   return new Blob([byteArray], { type: mime });
-} 
+}
+
+// 键盘快捷键：左右方向键/PageUp/PageDown 翻页
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+    if (rendition) rendition.prev();
+    e.preventDefault();
+  } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+    if (rendition) rendition.next();
+    e.preventDefault();
+  }
+}); 
